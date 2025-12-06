@@ -28,12 +28,16 @@ public class PaystackService {
     private String secretKey;
 
     private final TransactionRepository transactionRepository;
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate;
 
     @Transactional
     public PaymentInitiateResponseDTO initializeTransaction(PaymentRequest request) {
         if (request.getAmount() == null || request.getAmount() <= 0) {
             throw new IllegalArgumentException("Amount must be greater than zero");
+        }
+
+        if (request.getEmail() == null || request.getEmail().trim().isEmpty()) {
+            throw new IllegalArgumentException("Email is required");
         }
 
         try {
@@ -42,21 +46,37 @@ public class PaystackService {
             headers.setContentType(MediaType.APPLICATION_JSON);
 
             Map<String, Object> body = new HashMap<>();
+            body.put("email", request.getEmail());
             body.put("amount", request.getAmount());
 
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
 
             String url = "https://api.paystack.co/transaction/initialize";
+            log.info("Initializing Paystack transaction for email: {}, amount: {}", request.getEmail(),
+                    request.getAmount());
+
             ResponseEntity<Map> response = restTemplate.postForEntity(url, entity, Map.class);
 
+            log.info("Paystack API response status: {}", response.getStatusCode());
+
             if (response.getStatusCode() != HttpStatus.OK || response.getBody() == null) {
+                log.error("Paystack API returned non-OK status: {}", response.getStatusCode());
                 throw new PaymentException("Failed to initialize payment with Paystack");
             }
 
             Map<String, Object> responseBody = response.getBody();
+            Boolean status = (Boolean) responseBody.get("status");
+
+            if (status == null || !status) {
+                String message = (String) responseBody.get("message");
+                log.error("Paystack API returned status=false. Message: {}", message);
+                throw new PaymentException("Paystack error: " + (message != null ? message : "Unknown error"));
+            }
+
             Map<String, Object> data = (Map<String, Object>) responseBody.get("data");
 
             if (data == null) {
+                log.error("Paystack API response missing 'data' field");
                 throw new PaymentException("Invalid response from Paystack");
             }
 
@@ -89,9 +109,14 @@ public class PaystackService {
                     .authorizationUrl(authorizationUrl)
                     .build();
 
+        } catch (org.springframework.web.client.ResourceAccessException e) {
+            // This catches timeout and connection errors
+            log.error("Timeout or connection error calling Paystack API: {}", e.getMessage());
+            throw new PaymentException(
+                    "Unable to connect to Paystack. Please check your internet connection or try again later.", e);
         } catch (RestClientException e) {
             log.error("Error calling Paystack API", e);
-            throw new PaymentException("Payment initiation failed", e);
+            throw new PaymentException("Payment initiation failed: " + e.getMessage(), e);
         }
     }
 
