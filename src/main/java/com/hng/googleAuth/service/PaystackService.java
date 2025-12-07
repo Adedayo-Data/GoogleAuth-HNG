@@ -18,6 +18,7 @@ import org.springframework.web.client.RestTemplate;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -31,13 +32,9 @@ public class PaystackService {
     private final RestTemplate restTemplate;
 
     @Transactional
-    public PaymentInitiateResponseDTO initializeTransaction(PaymentRequest request) {
+    public PaymentInitiateResponseDTO initializeTransaction(PaymentRequest request, UUID userId, String userEmail) {
         if (request.getAmount() == null || request.getAmount() <= 0) {
             throw new IllegalArgumentException("Amount must be greater than zero");
-        }
-
-        if (request.getEmail() == null || request.getEmail().trim().isEmpty()) {
-            throw new IllegalArgumentException("Email is required");
         }
 
         try {
@@ -46,14 +43,16 @@ public class PaystackService {
             headers.setContentType(MediaType.APPLICATION_JSON);
 
             Map<String, Object> body = new HashMap<>();
-            body.put("email", request.getEmail());
-            body.put("amount", request.getAmount());
+            body.put("email", userEmail); // Use authenticated user's email
+            // Convert amount to kobo (Paystack requires amount in smallest currency unit)
+            // 1 Naira = 100 Kobo, so multiply by 100
+            Integer amountInKobo = (int) Math.round(request.getAmount() * 100);
+            body.put("amount", amountInKobo);
 
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
 
             String url = "https://api.paystack.co/transaction/initialize";
-            log.info("Initializing Paystack transaction for email: {}, amount: {}", request.getEmail(),
-                    request.getAmount());
+            log.info("Initializing Paystack transaction for user: {}, amount: {}", userId, request.getAmount());
 
             ResponseEntity<Map> response = restTemplate.postForEntity(url, entity, Map.class);
 
@@ -94,12 +93,13 @@ public class PaystackService {
                         .build();
             }
 
-            // Save transaction to database
+            // Save transaction to database with userId
             Transaction transaction = Transaction.builder()
                     .reference(reference)
                     .amount(request.getAmount())
                     .status("pending")
                     .authorizationUrl(authorizationUrl)
+                    .userId(userId) // Link to authenticated user
                     .build();
 
             transactionRepository.save(transaction);
@@ -178,5 +178,19 @@ public class PaystackService {
             log.error("Error verifying transaction with Paystack", e);
             throw new PaymentException("Transaction verification failed", e);
         }
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.List<TransactionStatusResponseDTO> getUserTransactions(java.util.UUID userId) {
+        java.util.List<Transaction> transactions = transactionRepository.findByUserId(userId);
+
+        return transactions.stream()
+                .map(transaction -> TransactionStatusResponseDTO.builder()
+                        .reference(transaction.getReference())
+                        .status(transaction.getStatus())
+                        .amount(transaction.getAmount())
+                        .paidAt(transaction.getPaidAt())
+                        .build())
+                .collect(java.util.stream.Collectors.toList());
     }
 }

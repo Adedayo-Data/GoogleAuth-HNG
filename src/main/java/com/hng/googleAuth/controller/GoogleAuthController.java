@@ -5,7 +5,9 @@ import com.hng.googleAuth.service.GoogleAuthService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -30,14 +32,19 @@ public class GoogleAuthController {
     }
 
     @GetMapping("/google/callback")
-    public ResponseEntity<UserResponseDTO> handleGoogleCallback(
-            @AuthenticationPrincipal OAuth2User oauth2User) {
+    public ResponseEntity<Map<String, Object>> handleGoogleCallback() {
 
-        if (oauth2User == null) {
-            throw new IllegalArgumentException("Missing authorization code");
+        // Get authentication from SecurityContext
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication == null || !(authentication.getPrincipal() instanceof OAuth2User)) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", "Missing authorization code"));
         }
 
-        UserResponseDTO userResponse = googleAuthService.createOrUpdateUser(oauth2User);
-        return ResponseEntity.status(HttpStatus.OK).body(userResponse);
+        OAuth2User oauth2User = (OAuth2User) authentication.getPrincipal();
+        Map<String, Object> response = googleAuthService.createOrUpdateUser(oauth2User);
+
+        return ResponseEntity.status(HttpStatus.OK).body(response);
     }
 }

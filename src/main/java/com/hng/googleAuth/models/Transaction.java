@@ -27,13 +27,16 @@ public class Transaction {
     private String reference;
 
     @Column(nullable = false)
-    private Long amount; // amount in kobo
+    private Double amount; // amount in Naira
 
     @Column(nullable = false)
     private String status; // pending, success, failed
 
     @Column(length = 500)
     private String authorizationUrl;
+
+    @Column(nullable = false)
+    private UUID userId; // Link to the user who created this transaction
 
     private LocalDateTime paidAt;
 

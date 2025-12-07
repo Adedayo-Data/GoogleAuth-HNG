@@ -1,18 +1,22 @@
 package com.hng.googleAuth.controller;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hng.googleAuth.dto.PaymentInitiateResponseDTO;
 import com.hng.googleAuth.dto.TransactionStatusResponseDTO;
+import com.hng.googleAuth.dto.UserResponseDTO;
 import com.hng.googleAuth.models.PaymentRequest;
+import com.hng.googleAuth.models.Users;
 import com.hng.googleAuth.service.PaystackService;
 import com.hng.googleAuth.util.PaystackWebhookValidator;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -29,8 +33,21 @@ public class PaymentController {
     private String webhookSecret;
 
     @PostMapping("/paystack/initiate")
-    public ResponseEntity<PaymentInitiateResponseDTO> initiatePayment(@RequestBody PaymentRequest request) {
-        PaymentInitiateResponseDTO response = paystackService.initializeTransaction(request);
+    public ResponseEntity<PaymentInitiateResponseDTO> initiatePayment(
+            @RequestBody PaymentRequest request,
+            Authentication authentication) {
+
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        Users currentUser = (Users) authentication.getPrincipal();
+
+        PaymentInitiateResponseDTO response = paystackService.initializeTransaction(
+                request,
+                currentUser.getId(),
+                currentUser.getEmail());
+
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
@@ -87,5 +104,18 @@ public class PaymentController {
 
         TransactionStatusResponseDTO response = paystackService.getTransactionStatus(reference, refresh);
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/my-transactions")
+    public ResponseEntity<List<TransactionStatusResponseDTO>> getMyTransactions(Authentication authentication) {
+
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        Users currentUser = (Users) authentication.getPrincipal();
+        List<TransactionStatusResponseDTO> transactions = paystackService.getUserTransactions(currentUser.getId());
+
+        return ResponseEntity.ok(transactions);
     }
 }

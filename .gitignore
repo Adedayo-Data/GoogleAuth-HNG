@@ -33,8 +33,11 @@ build/
 .vscode/
 
 ### Documentation (not tracked) ###
-README.md
 DEPLOYMENT.md
 DEPLOY_NOW.md
 QUICK_START.md
 ENV_SETUP.md
+
+### Docker ###
+.dockerignore
+

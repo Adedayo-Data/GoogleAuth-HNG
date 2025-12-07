@@ -16,6 +16,6 @@ import java.time.LocalDateTime;
 public class TransactionStatusResponseDTO {
     private String reference;
     private String status;
-    private Long amount;
+    private Double amount;
     private LocalDateTime paidAt;
 }
