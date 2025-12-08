@@ -43,9 +43,7 @@ public class PaystackService {
             headers.setContentType(MediaType.APPLICATION_JSON);
 
             Map<String, Object> body = new HashMap<>();
-            body.put("email", userEmail); // Use authenticated user's email
-            // Convert amount to kobo (Paystack requires amount in smallest currency unit)
-            // 1 Naira = 100 Kobo, so multiply by 100
+            body.put("email", userEmail);
             Integer amountInKobo = (int) Math.round(request.getAmount() * 100);
             body.put("amount", amountInKobo);
 

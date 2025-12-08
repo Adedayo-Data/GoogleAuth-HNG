@@ -41,7 +41,6 @@ public class GoogleAuthService {
                     return userRepository.save(newUser);
                 });
 
-        // Update user info if changed
         if (!user.getEmail().equals(email) ||
                 !user.getName().equals(name) ||
                 (picture != null && !picture.equals(user.getPicture()))) {
@@ -51,7 +50,6 @@ public class GoogleAuthService {
             user = userRepository.save(user);
         }
 
-        // Generate JWT token
         String token = jwtUtil.generateToken(user.getId(), user.getEmail());
 
         UserResponseDTO userResponse = UserResponseDTO.builder()
@@ -61,7 +59,6 @@ public class GoogleAuthService {
                 .picture(user.getPicture())
                 .build();
 
-        // Return both user data and token
         Map<String, Object> response = new HashMap<>();
         response.put("user", userResponse);
         response.put("token", token);
